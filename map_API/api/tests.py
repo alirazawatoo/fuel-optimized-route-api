@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import polyline
 import requests
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -84,6 +84,24 @@ class RouteTests(TestCase):
         station = FuelStation.objects.get()
         self.assertEqual(station.zip_code, '00123')
         self.assertEqual(station.price_per_gallon, 4.5)
+
+    def test_csv_with_a_bad_row_imports_nothing(self):
+        FuelStation.objects.all().delete()
+        with tempfile.TemporaryDirectory() as directory:
+            filename = Path(directory) / 'stations.csv'
+            filename.write_text(
+                'station_name,city,state,zip_code,latitude,longitude,fuel_type,price_per_gallon\n'
+                'Good,Demo,CA,00123,34,-118,Regular,4.10\n'
+                'Free fuel,Demo,CA,00124,34.1,-118.1,Regular,0\n')
+            with self.assertRaises(CommandError):
+                call_command('load_fuel_data', path=str(filename), stdout=io.StringIO())
+        self.assertFalse(FuelStation.objects.exists())
+
+    def test_bundled_sample_loads(self):
+        FuelStation.objects.all().delete()
+        call_command('load_fuel_data', stdout=io.StringIO())
+        self.assertEqual(FuelStation.objects.count(), 50)
+        self.assertFalse(FuelStation.objects.filter(price_per_gallon__lte=0).exists())
 
 
 class FuelCostRuleTests(TestCase):
