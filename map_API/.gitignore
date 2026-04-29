@@ -23,9 +23,6 @@ var/
 .installed.cfg
 *.egg
 
-# Pyenv
-.python-version
-
 # virtualenv
 env/
 venv/
@@ -41,6 +38,7 @@ media/
 # Environment variables file
 .env
 .env.*
+!.env.example
 
 # IDEs and editors
 .vscode/
