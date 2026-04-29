@@ -8,6 +8,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
 import polyline
+import requests
 from .models import FuelStation
 from .serializers import RouteRequestSerializer
 
@@ -121,3 +122,43 @@ class FuelCostRuleTests(TestCase):
             result = self.post_route(post, 552 / 0.000621371, tank_range=150)
         self.assertEqual(result.status_code, 200)
         self.assertEqual([s['station_name'] for s in result.data['fuel_stops']], ['Stop 2', 'Stop 4', 'Stop 6'])
+
+
+class ProviderAndLimitTests(TestCase):
+    payload = {'start_lat': 34, 'start_lng': -118, 'end_lat': 35, 'end_lng': -117}
+
+    def setUp(self):
+        self.client = APIClient()
+        FuelStation.objects.create(station_name='Synthetic', city='Demo', state='CA', zip_code='00123',
+                                   latitude=34, longitude=-118, fuel_type='Regular', price_per_gallon=4)
+
+    @patch('api.views.requests.post')
+    def test_timeout_maps_to_504_and_uses_configured_endpoint(self, post):
+        post.side_effect = requests.Timeout()
+        with self.settings(ORS_URL='http://ors.local/route', ORS_TIMEOUT_SECONDS=3):
+            result = self.client.post('/api/route/', self.payload, format='json')
+        self.assertEqual(result.status_code, 504)
+        self.assertEqual(post.call_args.args[0], 'http://ors.local/route')
+        self.assertEqual(post.call_args.kwargs['timeout'], 3)
+
+    @patch('api.views.requests.post')
+    def test_missing_key_is_503_without_calling_provider(self, post):
+        with self.settings(ORS_API_KEY=''):
+            result = self.client.post('/api/route/', self.payload, format='json')
+        self.assertEqual(result.status_code, 503)
+        post.assert_not_called()
+
+    def test_identical_endpoints_rejected(self):
+        same = {**self.payload, 'end_lat': 34, 'end_lng': -118}
+        self.assertEqual(self.client.post('/api/route/', same, format='json').status_code, 400)
+
+    @patch('api.views.requests.post')
+    def test_route_requests_are_rate_limited(self, post):
+        from django.core.cache import cache
+        from rest_framework.throttling import ScopedRateThrottle
+        cache.clear()
+        post.side_effect = requests.Timeout()
+        with patch.dict(ScopedRateThrottle.THROTTLE_RATES, {'route': '2/minute'}):
+            codes = [self.client.post('/api/route/', self.payload, format='json').status_code for _ in range(3)]
+        cache.clear()
+        self.assertEqual(codes, [504, 504, 429])

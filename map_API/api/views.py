@@ -5,6 +5,7 @@ import requests
 from django.conf import settings
 from django.db.models import Min
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .models import FuelStation
@@ -21,7 +22,7 @@ def fetch_route(start, end):
         settings.ORS_URL,
         headers={'Authorization': settings.ORS_API_KEY, 'Content-Type': 'application/json'},
         json={"coordinates": [start, end]},
-        timeout=10, allow_redirects=False,
+        timeout=settings.ORS_TIMEOUT_SECONDS, allow_redirects=False,
     )
     response.raise_for_status()
     route = response.json()["routes"][0]
@@ -49,6 +50,9 @@ def stations_along(route_coords):
 
 
 class RouteAPIView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'route'
+
     def post(self, request):
         serializer = RouteRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

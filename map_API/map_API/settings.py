@@ -32,7 +32,8 @@ if not SECRET_KEY:
         raise ImproperlyConfigured('Set DJANGO_SECRET_KEY or enable local DJANGO_DEBUG')
     SECRET_KEY = get_random_secret_key()
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+                 if host.strip()]
 
 
 # Application definition
@@ -84,16 +85,13 @@ WSGI_APPLICATION = 'map_API.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),          
-        'USER': os.getenv('DB_USER'),        
-        'PASSWORD': os.getenv('DB_PASSWORD'),  
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
-
-
-
 
 
 # Password validation
@@ -134,4 +132,10 @@ STATIC_URL = 'static/'
 
 
 ORS_API_KEY = os.getenv("ORS_API_KEY")
-ORS_URL="https://api.openrouteservice.org/v2/directions/driving-car"
+ORS_URL = os.getenv("ORS_URL", "https://api.openrouteservice.org/v2/directions/driving-car")
+ORS_TIMEOUT_SECONDS = float(os.getenv("ORS_TIMEOUT_SECONDS", "10"))
+
+# Every route request spends one call against the ORS key's daily quota.
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_RATES': {'route': os.getenv('ROUTE_RATE_LIMIT', '30/minute')},
+}
