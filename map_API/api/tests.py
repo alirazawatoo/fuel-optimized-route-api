@@ -109,3 +109,15 @@ class FuelCostRuleTests(TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data['fuel_stops'], [])
         self.assertEqual(result.data['total_fuel_cost'], 31.5)
+
+    @patch('api.views.requests.post')
+    def test_station_lookup_is_one_query_however_many_stops(self, post):
+        self.points = [(30 + step, -100.0) for step in range(9)]
+        for step in range(9):
+            FuelStation.objects.create(station_name=f'Stop {step}', city='T', state='TX', zip_code=str(step),
+                                       latitude=30 + step, longitude=-100.02, fuel_type='Regular',
+                                       price_per_gallon=3 + step / 10)
+        with self.assertNumQueries(2):
+            result = self.post_route(post, 552 / 0.000621371, tank_range=150)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual([s['station_name'] for s in result.data['fuel_stops']], ['Stop 2', 'Stop 4', 'Stop 6'])

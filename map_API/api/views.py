@@ -1,38 +1,52 @@
-import requests
+from math import isfinite
+
 import polyline
+import requests
 from django.conf import settings
 from django.db.models import Min
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from .serializers import RouteRequestSerializer
+from rest_framework.views import APIView
+
 from .models import FuelStation
-from math import radians, cos, sin, asin, sqrt, isfinite
+from .planner import Station, UnreachableRoute, plan_fuel_stops, route_bounds
+from .serializers import RouteRequestSerializer
+
+METERS_TO_MILES = 0.000621371
+MAX_ROUTE_POINTS = 10000
 
 
-def haversine(lat1, lon1, lat2, lon2):
-    """Distance in miles between two points"""
-
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    angle = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    central_angle = 2 * asin(sqrt(max(0, min(1, angle))))
-    return 3956 * central_angle
-
-def stations_near_point(lat, lng, radius_miles=50):
-    """Return fuel stations within radius"""
-    
-    lat_deg = radius_miles / 69.17
-    lng_deg = min(180, radius_miles / (69.17 * max(abs(cos(radians(lat))), 1e-9)))
-
-    nearby_stations = FuelStation.objects.filter(
-        latitude__range=(lat - lat_deg, lat + lat_deg),
-        longitude__range=(lng - lng_deg, lng + lng_deg),
-        price_per_gallon__gt=0
+def fetch_route(start, end):
+    """Ask ORS for a driving route; returns (distance in miles, [(lat, lng), ...])."""
+    response = requests.post(
+        settings.ORS_URL,
+        headers={'Authorization': settings.ORS_API_KEY, 'Content-Type': 'application/json'},
+        json={"coordinates": [start, end]},
+        timeout=10, allow_redirects=False,
     )
+    response.raise_for_status()
+    route = response.json()["routes"][0]
+    meters = route["summary"]["distance"]
+    if isinstance(meters, bool) or not isinstance(meters, (int, float)) or not isfinite(meters) or meters <= 0:
+        raise ValueError("route distance")
+    coords = polyline.decode(route["geometry"])
+    if not 2 <= len(coords) <= MAX_ROUTE_POINTS:
+        raise ValueError("route point count")
+    for point in coords:
+        if not (len(point) == 2 and all(isfinite(v) for v in point)
+                and -90 <= point[0] <= 90 and -180 <= point[1] <= 180):
+            raise ValueError("route point")
+    return meters * METERS_TO_MILES, coords
 
-    # Precise haversine check
-    return [s for s in nearby_stations if haversine(lat, lng, s.latitude, s.longitude) <= radius_miles]
+
+def stations_along(route_coords):
+    """Every priced station that could fall inside the widest search radius, in one query."""
+    (min_lat, max_lat), lng_range = route_bounds(route_coords)
+    stations = FuelStation.objects.filter(price_per_gallon__gt=0, latitude__range=(min_lat, max_lat))
+    if lng_range:
+        stations = stations.filter(longitude__range=lng_range)
+    return [Station(s.station_name, s.latitude, s.longitude, s.price_per_gallon)
+            for s in stations.only('station_name', 'latitude', 'longitude', 'price_per_gallon')]
+
 
 class RouteAPIView(APIView):
     def post(self, request):
@@ -40,119 +54,36 @@ class RouteAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        start = [data['start_lng'], data['start_lat']]
-        end = [data['end_lng'], data['end_lat']]
-
         if not settings.ORS_API_KEY:
             return Response({"error": "Routing provider is not configured."}, status=503)
-        if not FuelStation.objects.filter(price_per_gallon__gt=0).exists():
+        cheapest_price = FuelStation.objects.filter(price_per_gallon__gt=0).aggregate(
+            price=Min('price_per_gallon'))['price']
+        if cheapest_price is None:
             return Response({"error": "Load positive station prices before requesting a route."}, status=503)
-        route_url = settings.ORS_URL
+
+        # ORS expects [lng, lat] pairs.
+        start = [data['start_lng'], data['start_lat']]
+        end = [data['end_lng'], data['end_lat']]
         try:
-            resp = requests.post(
-                route_url,
-                headers={'Authorization': settings.ORS_API_KEY, 'Content-Type': 'application/json'},
-                json={"coordinates": [start, end]},
-                timeout=10, allow_redirects=False
-            )
-            resp.raise_for_status()
-            route_resp = resp.json()
+            total_distance_miles, route_coords = fetch_route(start, end)
         except requests.exceptions.Timeout:
             return Response({"error": "Routing service timed out."}, status=504)
-        except (requests.exceptions.RequestException, ValueError):
+        except requests.exceptions.RequestException:
             return Response({"error": "Routing provider request failed."}, status=502)
-
-        try:
-            route_data = route_resp["routes"][0]
-            actual_distance_meters = route_data["summary"]["distance"]
-            if isinstance(actual_distance_meters, bool) or not isinstance(actual_distance_meters, (int, float)) or not isfinite(actual_distance_meters) or actual_distance_meters <= 0:
-                raise ValueError()
-            total_distance_miles = actual_distance_meters * 0.000621371
-            route_coords = polyline.decode(route_data["geometry"])
-            if not 2 <= len(route_coords) <= 10000:
-                raise ValueError()
-            if any(not (len(point) == 2 and isfinite(point[0]) and isfinite(point[1]) and -90 <= point[0] <= 90 and -180 <= point[1] <= 180) for point in route_coords):
-                raise ValueError()
         except (KeyError, IndexError, TypeError, ValueError, OverflowError):
             return Response({"error": "Routing provider returned invalid route data."}, status=502)
 
-        tank_range = data['tank_range_miles']
-        mpg = data['vehicle_mpg']
-        SAFETY_BUFFER = 50  # miles before empty
-        SEARCH_RADIUS = 50  # search radius for fuel stations
-
-        # for distance accuracy we will track distance relative to the API's total
-        fuel_stops = []
-        total_fuel_cost = 0
-        remaining_range = tank_range
-
-        # We need to know how far we have traveled along the polyline segments
-        # and normalize it to match the total_distance_miles from the API.
-        polyline_segments = []
-        polyline_total_haversine = 0
-        for i in range(len(route_coords) - 1):
-            p1, p2 = route_coords[i], route_coords[i+1]
-            distance = haversine(p1[0], p1[1], p2[0], p2[1])
-            polyline_segments.append(distance)
-            polyline_total_haversine += distance
-
-        # API total might differ slightly from haversine sum of polyline points
-        norm_factor = total_distance_miles / polyline_total_haversine if polyline_total_haversine > 0 else 1
-
-        distance_since_refuel = 0
-        distance_travelled = 0
-
-        for i, segment_distance in enumerate(polyline_segments):
-            normalized_segment_distance = segment_distance * norm_factor
-            if normalized_segment_distance > remaining_range:
-                return Response({"error": "This route sampling cannot establish reachable fuel stops within the tank range."}, status=422)
-            distance_since_refuel += normalized_segment_distance
-            distance_travelled += normalized_segment_distance
-            remaining_range -= normalized_segment_distance
-
-            # A stop is pointless once the destination is within the fuel left.
-            if remaining_range < SAFETY_BUFFER and total_distance_miles - distance_travelled > remaining_range:
-                current_point = route_coords[i+1]
-                nearby = stations_near_point(current_point[0], current_point[1], radius_miles=SEARCH_RADIUS)
-
-                # If no stations within search radius expand search slightly
-                if not nearby:
-                    nearby = stations_near_point(current_point[0], current_point[1], radius_miles=100)
-
-                if nearby:
-                    min_station = min(nearby, key=lambda x: x.price_per_gallon)
-
-                    fuel_needed = distance_since_refuel / mpg
-                    total_fuel_cost += fuel_needed * min_station.price_per_gallon
-
-                    fuel_stops.append({
-                        "station_name": min_station.station_name,
-                        "latitude": min_station.latitude,
-                        "longitude": min_station.longitude,
-                        "price_per_gallon": min_station.price_per_gallon,
-                    })
-
-                    # Reset range
-                    remaining_range = tank_range
-                    distance_since_refuel = 0
-
-        # Total fuel cost should cover the whole trip 
-        # If we didn't refuel at the very end we should still account for the fuel used for the last segemnt
-        if distance_since_refuel > 0:
-            # We either need to refuel to finish or we use what is in the tank
-            # If we don't refuel at the end, we assume we consumed the remaining distance worth of fuel
-            # but we don't have a station price for it. We will use the price of the last stop or minimum from the DB.
-            if fuel_stops:
-                last_price = fuel_stops[-1]["price_per_gallon"]
-            else:
-                last_price = FuelStation.objects.filter(price_per_gallon__gt=0).aggregate(
-                    price=Min('price_per_gallon'))['price']
-
-            total_fuel_cost += (distance_since_refuel / mpg) * last_price
+        try:
+            plan = plan_fuel_stops(route_coords, total_distance_miles, data['tank_range_miles'],
+                                   data['vehicle_mpg'], stations_along(route_coords), cheapest_price)
+        except UnreachableRoute:
+            return Response(
+                {"error": "This route sampling cannot establish reachable fuel stops within the tank range."},
+                status=422)
 
         return Response({
             "route": route_coords,
-            "fuel_stops": fuel_stops,
+            "fuel_stops": plan.stops,
             "total_distance_miles": round(total_distance_miles, 2),
-            "total_fuel_cost": round(total_fuel_cost, 2),
+            "total_fuel_cost": round(plan.total_fuel_cost, 2),
         })
