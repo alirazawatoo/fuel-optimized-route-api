@@ -72,3 +72,40 @@ class RouteTests(TestCase):
         station = FuelStation.objects.get()
         self.assertEqual(station.zip_code, '00123')
         self.assertEqual(station.price_per_gallon, 4.5)
+
+
+class FuelCostRuleTests(TestCase):
+    """Routes along the -100 meridian, one point per degree of latitude (about 69 miles)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.points = [(30 + step, -100.0) for step in range(4)]
+
+    def post_route(self, post, distance_meters, tank_range):
+        response = Mock()
+        response.json.return_value = {'routes': [{'summary': {'distance': distance_meters},
+                                                  'geometry': polyline.encode(self.points)}]}
+        post.return_value = response
+        payload = {'start_lat': 30, 'start_lng': -100, 'end_lat': 33, 'end_lng': -100,
+                   'vehicle_mpg': 20, 'tank_range_miles': tank_range}
+        return self.client.post('/api/route/', payload, format='json')
+
+    @patch('api.views.requests.post')
+    def test_fallback_price_ignores_zero_priced_rows(self, post):
+        FuelStation.objects.create(station_name='Bad row', city='X', state='TX', zip_code='1',
+                                   latitude=10, longitude=10, fuel_type='Regular', price_per_gallon=0)
+        FuelStation.objects.create(station_name='Real', city='Y', state='TX', zip_code='2',
+                                   latitude=10, longitude=11, fuel_type='Regular', price_per_gallon=4)
+        result = self.post_route(post, 200 / 0.000621371, tank_range=500)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['total_fuel_cost'], 40)
+
+    @patch('api.views.requests.post')
+    def test_no_stop_when_destination_is_within_remaining_range(self, post):
+        FuelStation.objects.create(station_name='Last town', city='Z', state='TX', zip_code='3',
+                                   latitude=32, longitude=-100, fuel_type='Regular', price_per_gallon=3)
+        # 210 miles on a 220-mile tank: range dips under the 50-mile buffer, but the trip still finishes.
+        result = self.post_route(post, 210 / 0.000621371, tank_range=220)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['fuel_stops'], [])
+        self.assertEqual(result.data['total_fuel_cost'], 31.5)

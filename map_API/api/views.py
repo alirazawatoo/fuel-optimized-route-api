@@ -1,6 +1,7 @@
 import requests
 import polyline
 from django.conf import settings
+from django.db.models import Min
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .serializers import RouteRequestSerializer
@@ -99,15 +100,18 @@ class RouteAPIView(APIView):
         norm_factor = total_distance_miles / polyline_total_haversine if polyline_total_haversine > 0 else 1
 
         distance_since_refuel = 0
+        distance_travelled = 0
 
         for i, segment_distance in enumerate(polyline_segments):
             normalized_segment_distance = segment_distance * norm_factor
             if normalized_segment_distance > remaining_range:
                 return Response({"error": "This route sampling cannot establish reachable fuel stops within the tank range."}, status=422)
             distance_since_refuel += normalized_segment_distance
+            distance_travelled += normalized_segment_distance
             remaining_range -= normalized_segment_distance
 
-            if remaining_range < SAFETY_BUFFER:
+            # A stop is pointless once the destination is within the fuel left.
+            if remaining_range < SAFETY_BUFFER and total_distance_miles - distance_travelled > remaining_range:
                 current_point = route_coords[i+1]
                 nearby = stations_near_point(current_point[0], current_point[1], radius_miles=SEARCH_RADIUS)
 
@@ -141,8 +145,8 @@ class RouteAPIView(APIView):
             if fuel_stops:
                 last_price = fuel_stops[-1]["price_per_gallon"]
             else:
-                all_stations = FuelStation.objects.all()
-                last_price = min(all_stations, key=lambda x: x.price_per_gallon).price_per_gallon if all_stations.exists() else 0
+                last_price = FuelStation.objects.filter(price_per_gallon__gt=0).aggregate(
+                    price=Min('price_per_gallon'))['price']
 
             total_fuel_cost += (distance_since_refuel / mpg) * last_price
 
