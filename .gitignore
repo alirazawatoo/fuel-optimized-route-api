@@ -1,0 +1,64 @@
+# .gitignore for the project
+# Ignore byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+htmlcov/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+
+# IDEs and editors
+.idea/
+
+# macOS
+.DS_Store
+
+# Environment variables
+.env
+.env.*
+
+# Mypy
+.mypy_cache/
+
+# Misc
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
