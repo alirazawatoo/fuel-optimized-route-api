@@ -1,0 +1,16 @@
+asgiref==3.11.1
+certifi==2026.1.4
+charset-normalizer==3.4.4
+Django==6.0.2
+djangorestframework==3.16.1
+idna==3.11
+numpy==2.4.2
+pandas==3.0.0
+polyline==2.0.4
+psycopg2==2.9.11
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.1
+requests==2.32.5
+six==1.17.0
+sqlparse==0.5.5
+urllib3==2.6.3
