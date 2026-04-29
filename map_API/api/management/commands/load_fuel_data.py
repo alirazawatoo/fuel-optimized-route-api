@@ -6,10 +6,15 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from api.models import FuelStation
 
+IDENTITY_FIELDS = ['station_name', 'city', 'state', 'zip_code', 'fuel_type']
+
+
 class Command(BaseCommand):
     help = 'Load station prices from a CSV; existing station identities have their price updated'
+
     def add_arguments(self, parser):
         parser.add_argument('--path', default=str(Path(settings.BASE_DIR) / 'fuel_prices_sample.csv'))
+
     def handle(self, *args, **options):
         rows = []
         try:
@@ -17,11 +22,12 @@ class Command(BaseCommand):
                 for number, row in enumerate(csv.DictReader(source), 2):
                     if not any(row.values()):
                         continue
-                    identity = {key: row[key].strip() for key in ['station_name', 'city', 'state', 'zip_code', 'fuel_type']}
+                    identity = {key: row[key].strip() for key in IDENTITY_FIELDS}
                     if any(not value for value in identity.values()):
                         raise ValueError(f'Missing identity on line {number}')
                     lat, lng, price = (float(row[key]) for key in ['latitude', 'longitude', 'price_per_gallon'])
-                    if not all(math.isfinite(value) for value in [lat, lng, price]) or not -90 <= lat <= 90 or not -180 <= lng <= 180 or price <= 0:
+                    finite = all(math.isfinite(value) for value in [lat, lng, price])
+                    if not finite or not -90 <= lat <= 90 or not -180 <= lng <= 180 or price <= 0:
                         raise ValueError(f'Invalid coordinate or price on line {number}')
                     identity.update(latitude=lat, longitude=lng)
                     rows.append((identity, price))

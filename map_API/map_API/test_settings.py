@@ -1,6 +1,6 @@
 import os
 os.environ['DJANGO_DEBUG'] = 'true'
-from .settings import *
+from .settings import *  # noqa: E402,F401,F403
 DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
 ALLOWED_HOSTS = ['testserver', 'localhost']
 ORS_API_KEY = 'synthetic-test-key'

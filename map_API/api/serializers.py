@@ -1,5 +1,7 @@
-from rest_framework import serializers
 import math
+
+from rest_framework import serializers
+
 
 class RouteRequestSerializer(serializers.Serializer):
     start_lat = serializers.FloatField()
@@ -23,7 +25,6 @@ class RouteRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError({'vehicle_mpg': 'Use 1 to 200 MPG'})
         if not 51 <= data['tank_range_miles'] <= 2000:
             raise serializers.ValidationError({'tank_range_miles': 'Use a range of 51 to 2000 miles'})
-        if (data['start_lat'] == data['end_lat'] and 
-            data['start_lng'] == data['end_lng']):
+        if data['start_lat'] == data['end_lat'] and data['start_lng'] == data['end_lng']:
             raise serializers.ValidationError("Start and end locations must be different")
         return data
