@@ -1,0 +1,51 @@
+station_name,city,state,zip_code,latitude,longitude,fuel_type,price_per_gallon
+Shell,Los Angeles,CA,90001,34.0522,-118.2437,Regular,4.59
+Chevron,San Francisco,CA,94102,37.7749,-122.4194,Regular,4.79
+BP,New York,NY,10001,40.7128,-74.006,Regular,4.69
+Exxon,Chicago,IL,60601,41.8781,-87.6298,Regular,4.55
+Mobil,Houston,TX,77002,29.7604,-95.3698,Regular,4.49
+Shell,Miami,FL,33101,25.7617,-80.1918,Regular,4.65
+Chevron,Seattle,WA,98101,47.6062,-122.3321,Regular,4.75
+BP,Boston,MA,02108,42.3601,-71.0589,Regular,4.72
+Exxon,Denver,CO,80202,39.7392,-104.9903,Regular,4.58
+Mobil,Atlanta,GA,30303,33.749,-84.388,Regular,4.62
+Love's Travel Stop,Oklahoma City,OK,73102,35.4676,-97.5164,Regular,4.12
+Pilot Travel Center,Phoenix,AZ,85001,33.4484,-112.074,Regular,4.35
+Flying J,Salt Lake City,UT,84101,40.7608,-111.891,Regular,4.28
+Sheetz,Pittsburgh,PA,15201,40.4406,-79.9959,Regular,4.45
+Wawa,Philadelphia,PA,19102,39.9526,-75.1652,Regular,4.39
+QuikTrip,Tulsa,OK,74103,36.154,-95.9928,Regular,4.08
+Buck-ee's,Terrell,TX,75160,32.736,-96.275,Regular,3.99
+Casey's General Store,Des Moines,IA,50309,41.5868,-93.625,Regular,4.15
+Kum & Go,Sioux Falls,SD,57104,43.546,-96.731,Regular,4.19
+Thorntons,Louisville,KY,40202,38.2527,-85.7585,Regular,4.25
+Holiday Gas Station,Minneapolis,MN,55401,44.9778,-93.265,Regular,4.32
+Kwik Trip,Madison,WI,53703,43.0731,-89.4012,Regular,4.21
+Maverik,Boise,ID,83702,43.615,-116.2023,Regular,4.42
+7-Eleven,Dallas,TX,75201,32.7767,-96.797,Regular,4.15
+Circle K,Orlando,FL,32801,28.5383,-81.3792,Regular,4.29
+RaceTrac,New Orleans,LA,70112,29.9511,-90.0715,Regular,4.05
+Murphy USA,Little Rock,AR,72201,34.7465,-92.2896,Regular,3.95
+Speedway,Indianapolis,IN,46204,39.7684,-86.1581,Regular,4.18
+Sunoco,Richmond,VA,23219,37.5407,-77.436,Regular,4.31
+Valero,San Antonio,TX,78205,29.4241,-98.4936,Regular,4.09
+ARCO,Portland,OR,97201,45.5152,-122.6784,Regular,4.68
+Marathon,Columbus,OH,43215,39.9612,-82.9988,Regular,4.22
+Phillips 66,Wichita,KS,67202,37.6889,-97.3361,Regular,4.11
+GetGo,Cleveland,OH,44113,41.4993,-81.6944,Regular,4.27
+Royal Farms,Baltimore,MD,21201,39.2904,-76.6122,Regular,4.36
+Spinx,Greenville,SC,29601,34.8526,-82.394,Regular,4.14
+Parker's,Savannah,GA,31401,32.0809,-81.0912,Regular,4.19
+Rutter's,York,PA,17401,39.9626,-76.7277,Regular,4.41
+Town Pump,Missoula,MT,59801,46.8721,-113.994,Regular,4.38
+Rebel,Las Vegas,NV,89101,36.1699,-115.1398,Regular,4.52
+Stinker Stores,Pocatello,ID,83201,42.8713,-112.4455,Regular,4.40
+FastTrip,Bakersfield,CA,93301,35.3733,-119.0187,Regular,4.72
+Rotten Robbie,San Jose,CA,95110,37.3382,-121.8863,Regular,4.85
+Costco,Fremont,CA,94538,37.5485,-121.9886,Regular,4.45
+Sam's Club,Albuquerque,NM,87102,35.0844,-106.6504,Regular,4.02
+Sinclair,Casper,WY,82601,42.8501,-106.3252,Regular,4.28
+Conoco,Fargo,ND,58102,46.8772,-96.7898,Regular,4.18
+Cenex,Bismarck,ND,58501,46.8083,-100.7837,Regular,4.21
+TESORO,Anchorage,AK,99501,61.2181,-149.9003,Regular,4.55
+Hele,Honolulu,HI,96813,21.3069,-157.8583,Regular,4.95
